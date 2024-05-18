@@ -6,30 +6,29 @@ module load_store_fsm
 ) (
     input logic clk,
     input logic rst,
-
     input logic move_flush,
 
+    // flush branch signal
     input logic rob_ready,
     input logic rob_valid,
     input logic flush_branch,
 
-    input logic dmem_resp,
+    // request
+    input logic [LOAD_RS_DEPTH-1:0] load_rs_dmem_idx_rqst,
     input logic dmem_r_rqst,
     input logic dmem_w_rqst,
-
-    // for rqst
-    input logic [LOAD_RS_DEPTH-1:0] load_rs_idx_rqst,
+    output logic dmem_rqst,
     output logic arbiter_load_rs,
-    output logic arbiter_store_rs,
+    output logic arbiter_store_buffer,
 
-    // for pop
-    output logic [LOAD_RS_DEPTH-1:0] load_rs_idx_executing,
-    output logic load_rs_pop,
-    output logic store_rs_pop,
-    output logic dmem_rqst
+    // response
+    input logic dmem_resp,
+    output logic [LOAD_RS_DEPTH-1:0] load_rs_dmem_idx_executing,
+    output logic load_rs_dmem_ready,
+    output logic store_buffer_pop
 );
 
-  logic [LOAD_RS_DEPTH-1:0] internal_load_rs_idx_executing;
+  logic [LOAD_RS_DEPTH-1:0] internal_load_rs_dmem_idx_executing;
 
   enum logic [1:0] {
     Start,
@@ -48,24 +47,24 @@ module load_store_fsm
 
   always_ff @(posedge clk) begin
     if (rst || move_flush) begin
-      internal_load_rs_idx_executing <= '0;
+      internal_load_rs_dmem_idx_executing <= '0;
     end else begin
       case (curr_state)
         Start: begin
           if (!(flush_branch && rob_valid && rob_ready)) begin
             if (!dmem_w_rqst && dmem_r_rqst) begin
-              internal_load_rs_idx_executing <= load_rs_idx_rqst;
+              internal_load_rs_dmem_idx_executing <= load_rs_dmem_idx_rqst;
             end
           end
         end
         DMEM_R_STALL: begin
           if (dmem_resp) begin
-            internal_load_rs_idx_executing <= '0;
+            internal_load_rs_dmem_idx_executing <= '0;
           end
         end
         DMEM_W_STALL: begin
           if (dmem_resp) begin
-            internal_load_rs_idx_executing <= '0;
+            internal_load_rs_dmem_idx_executing <= '0;
           end
         end
       endcase
@@ -76,10 +75,10 @@ module load_store_fsm
     next_state = curr_state;
     dmem_rqst = '0;
     arbiter_load_rs = '0;
-    arbiter_store_rs = '0;
-    load_rs_pop = '0;
-    store_rs_pop = '0;
-    load_rs_idx_executing = '0;
+    arbiter_store_buffer = '0;
+    load_rs_dmem_ready = '0;
+    store_buffer_pop = '0;
+    load_rs_dmem_idx_executing = '0;
 
     case (curr_state)
       Start: begin
@@ -108,7 +107,7 @@ module load_store_fsm
         if (!(flush_branch && rob_valid && rob_ready)) begin
           if (dmem_w_rqst) begin
             dmem_rqst = '1;
-            arbiter_store_rs = '1;
+            arbiter_store_buffer = '1;
           end else if (dmem_r_rqst) begin
             dmem_rqst = '1;
             arbiter_load_rs = '1;
@@ -117,13 +116,13 @@ module load_store_fsm
       end
       DMEM_R_STALL: begin
         if (dmem_resp) begin
-          load_rs_pop = '1;
-          load_rs_idx_executing = internal_load_rs_idx_executing;
+          load_rs_dmem_ready = '1;
+          load_rs_dmem_idx_executing = internal_load_rs_dmem_idx_executing;
         end
       end
       DMEM_W_STALL: begin
         if (dmem_resp) begin
-          store_rs_pop = '1;
+          store_buffer_pop = '1;
         end
       end
     endcase

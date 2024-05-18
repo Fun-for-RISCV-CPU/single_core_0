@@ -5,16 +5,15 @@ module instruction_queue #(
     input logic rst,
     input logic move_flush,
 
-    // full decides whether we could still fetch(insert into queue)
+    // outputing whether the instruction queue is full and the valid/opcode information
+    // we assume the instr_push and instr_pop are always correct
     output logic instr_full,
-    input logic move_fetch,
-
-    // valid & ready decides whether we could issue to reservation station(remove from queue)
     output logic instr_valid,
     output logic instr_ready,
-    input logic instr_pop,
 
+    input logic move_fetch,
     input logic imem_resp,
+    input logic instr_pop,
 
     input logic [31:0] imem_rdata,
     input logic [63:0] fetch_order,
@@ -52,6 +51,14 @@ module instruction_queue #(
     instr_full  = valid_arr[valid_head];
     instr_valid = valid_arr[valid_tail];
     instr_ready = ready_arr[ready_tail];
+  end
+
+  // sending value
+  always_comb begin
+    issue_instr = instr_arr[ready_tail];
+    issue_order = order_arr[ready_tail];
+    issue_pc = pc_arr[ready_tail];
+    issue_pc_next = pc_next_arr[ready_tail];
   end
 
   // if full (head == tail), we do not support pop tail and push head at same cycle
@@ -93,14 +100,6 @@ module instruction_queue #(
     end
   end
 
-// sending value
-  always_comb begin
-    issue_instr = instr_arr[ready_tail];
-    issue_order = order_arr[ready_tail];
-    issue_pc = pc_arr[ready_tail];
-    issue_pc_next = pc_next_arr[ready_tail];
-  end
-    
   decode decode (
       .inst(issue_instr),
       .funct3(issue_funct3),

@@ -4,7 +4,7 @@ module instr_cachefsm
     input logic        clk,
     input logic        rst,
     input logic        ufp_read,
-  input  logic [ 3:0] cpu_ufp_rmask, // for read-only pipelined cache purpose
+    input  logic [ 3:0] cpu_ufp_rmask,
     input logic [ 1:0] Hit_Miss,
     input logic [31:0] ufp_addr,
     input logic        bfp_ready,
@@ -56,9 +56,6 @@ module instr_cachefsm
       Compare_Tag: begin
         case (Hit_Miss)
           Hit: begin
-              // resp with same cycle rqst
-              //   1. read-only piplined cache should stay in compare_tag state
-              //   2. start reading new address(new set) in the resp cycle
             if (cpu_ufp_rmask == '0) begin 
               next_state = Idle;
             end

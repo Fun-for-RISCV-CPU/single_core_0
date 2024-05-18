@@ -20,11 +20,11 @@ import rv32i_types::*;
     // with ready & valid to decide dmem_w_rqst
     input logic [ROB_DEPTH-1:0] rob_tail,
 
-    // to fsm
-    output logic dmem_w_rqst,
+    // from store_buffer
+    input logic store_buffer_full,
 
-    // from fsm
-    input logic store_rs_pop,
+    // update the count in load_rs
+    output logic store_rs_pop,
 
     // issue input data
     input logic [ 2:0] issue_funct3,
@@ -41,7 +41,7 @@ import rv32i_types::*;
     input logic [           31:0] issue_rs1_rob_v,
     input logic [           31:0] issue_rs2_rob_v,
     output logic [STORE_RS_DEPTH:0] issue_store_rs_count,
-    // output logic [STORE_RS_DEPTH-1:0] issue_store_rs_head,
+    output logic [STORE_RS_DEPTH-1:0] issue_store_rs_head,
 
     // snoop cdb data
     input logic                 cdb_valid[CDB_SIZE],
@@ -49,15 +49,17 @@ import rv32i_types::*;
     input logic [         31:0] cdb_rd_v [CDB_SIZE],
 
     // forward to load queue
-    // output logic forward_wready[STORE_RS_NUM_ELEM],
-    // output logic [31:0] forward_waddr[STORE_RS_NUM_ELEM],
+    output logic store_rs_wready[STORE_RS_NUM_ELEM],
+    output logic [31:0] store_rs_addr[STORE_RS_NUM_ELEM],
+    output logic [3:0] store_rs_wmask[STORE_RS_NUM_ELEM],
+    output logic [31:0] store_rs_wdata[STORE_RS_NUM_ELEM],
 
     // to cdb
     output logic cdb_store_rs_valid,
     output logic [ROB_DEPTH-1:0] cdb_store_rs_rob,
-    output logic [3:0] cdb_arbiter_store_rs_wmask,
-    output logic [31:0] cdb_arbiter_store_rs_addr,
-    output logic [31:0] cdb_arbiter_store_rs_wdata
+    output logic [3:0] cdb_store_rs_wmask,
+    output logic [31:0] cdb_store_rs_addr,
+    output logic [31:0] cdb_store_rs_wdata
 );
     
     // valid and ready
@@ -81,7 +83,6 @@ import rv32i_types::*;
     logic [STORE_RS_DEPTH-1:0] tail;
     // avoid overflow
     logic [STORE_RS_DEPTH:0] count;
-
 
     always_comb begin 
         store_rs_full = '0;
@@ -176,23 +177,32 @@ import rv32i_types::*;
     // to load_rs when issue and always connected
     always_comb begin
         issue_store_rs_count = count;
-        // issue_store_rs_head = head;
-        // for (int unsigned i = 0; i < STORE_RS_NUM_ELEM; i ++) begin 
-        //     forward_wready[i] = rs1_ready_arr[i];
-        //     forward_waddr[i] = rs1_v_arr[i] + imm_arr[i];
-        // end
+        issue_store_rs_head = head;
+        for (int unsigned i = 0; i < STORE_RS_NUM_ELEM; i ++) begin 
+            store_rs_wready[i] = rs1_ready_arr[i] && rs2_ready_arr[i];
+            store_rs_addr[i] = rs1_v_arr[i] + imm_arr[i];
+            store_rs_wmask[i] = 4'b1111;
+            store_rs_wdata[i] = '0;
+            case(funct3_arr[i]) 
+                sb_mem: begin
+                    store_rs_wmask[i] = 4'b0001 << store_rs_addr[i][1:0];
+                    store_rs_wdata[i][8 * store_rs_addr[i][1:0] +: 8] = rs2_v_arr[i][7:0];
+                end
+                sh_mem: begin
+                    store_rs_wmask[i] = 4'b0011 << store_rs_addr[i][1:0];
+                    store_rs_wdata[i][16 * store_rs_addr[i][1] +: 16] = rs2_v_arr[i][15:0];
+                end
+                sw_mem: begin
+                    store_rs_wmask[i] = 4'b1111;
+                    store_rs_wdata[i] = rs2_v_arr[i];
+                end
+            endcase
+        end
     end
 
-    // to fsm
+    // to cdb signal
     always_comb begin
-        dmem_w_rqst = '0;
-        if (valid_arr[tail] && rs1_ready_arr[tail] && rs2_ready_arr[tail] && (target_rob_arr[tail] == rob_tail)) begin
-            dmem_w_rqst = '1; 
-        end
-    end 
-
-    // to cdb
-    always_comb begin
+        store_rs_pop = valid_arr[tail] && rs1_ready_arr[tail] && rs2_ready_arr[tail] && (target_rob_arr[tail] == rob_tail) && (~store_buffer_full);
         cdb_store_rs_valid = '0;
         cdb_store_rs_rob = '0;
         if (store_rs_pop) begin
@@ -201,23 +211,23 @@ import rv32i_types::*;
         end
     end
 
-    // to arbiter and cdb
+    // to cdb value
     always_comb begin
-        cdb_arbiter_store_rs_addr = rs1_v_arr[tail] + imm_arr[tail];
-        cdb_arbiter_store_rs_wmask = '0;
-        cdb_arbiter_store_rs_wdata = '0;
+        cdb_store_rs_addr = rs1_v_arr[tail] + imm_arr[tail];
+        cdb_store_rs_wmask = '0;
+        cdb_store_rs_wdata = '0;
         case (funct3_arr[tail])
             sb_mem: begin
-                cdb_arbiter_store_rs_wmask = 4'b0001 << cdb_arbiter_store_rs_addr[1:0];
-                cdb_arbiter_store_rs_wdata[8 * cdb_arbiter_store_rs_addr[1:0] +: 8] = rs2_v_arr[tail][7:0];
+                cdb_store_rs_wmask = 4'b0001 << cdb_store_rs_addr[1:0];
+                cdb_store_rs_wdata[8 * cdb_store_rs_addr[1:0] +: 8] = rs2_v_arr[tail][7:0];
             end 
             sh_mem: begin
-                cdb_arbiter_store_rs_wmask = 4'b0011 << cdb_arbiter_store_rs_addr[1:0];
-                cdb_arbiter_store_rs_wdata[16 * cdb_arbiter_store_rs_addr[1] +: 16] = rs2_v_arr[tail][15:0];
+                cdb_store_rs_wmask = 4'b0011 << cdb_store_rs_addr[1:0];
+                cdb_store_rs_wdata[16 * cdb_store_rs_addr[1] +: 16] = rs2_v_arr[tail][15:0];
             end
             sw_mem: begin
-                cdb_arbiter_store_rs_wmask = 4'b1111;
-                cdb_arbiter_store_rs_wdata = rs2_v_arr[tail];
+                cdb_store_rs_wmask = 4'b1111;
+                cdb_store_rs_wdata = rs2_v_arr[tail];
             end
         endcase
     end
