@@ -60,6 +60,7 @@ module instr_cache
     // resp with same cycle rqst
     //   1. read-only piplined cache should stay in compare_tag state
     //   2. start reading new address(new set) in the resp cycle
+    //   3. same as instr_serve.sv 21-23 lines logic
     if (ufp_resp) begin 
       if (cpu_ufp_rmask != '0) begin
         csb0 = '0;
