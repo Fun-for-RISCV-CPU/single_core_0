@@ -14,6 +14,9 @@ module data_cache_arbiter (
     output logic [31:0] dmem_addr,
     output logic [31:0] dmem_wdata
 );
+
+  // ensure the provided rmask, wmask, addr will only high for one cycle
+  // other times will be '0
   always_comb begin
     dmem_rmask = '0;
     dmem_wmask = '0;
