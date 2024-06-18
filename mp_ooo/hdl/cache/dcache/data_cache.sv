@@ -193,36 +193,11 @@ module data_cache
       endcase
     end else begin
       // valid && dirty
-      case (PLRU_Way_Replace)
-        Way_A: begin
-          if (internal_valid_array_read[Way_A] && internal_tag_array_read[Way_A][23]) begin
-            Hit_Miss = Dirty_Miss;
-          end else begin
-            Hit_Miss = Clean_Miss;
-          end
+        if (internal_valid_array_read[PLRU_Way_Replace] && internal_tag_array_read[PLRU_Way_Replace][23]) begin
+          Hit_Miss = Dirty_Miss;
+        end else begin
+          Hit_Miss = Clean_Miss;
         end
-        Way_B: begin
-          if (internal_valid_array_read[Way_B] && internal_tag_array_read[Way_B][23]) begin
-            Hit_Miss = Dirty_Miss;
-          end else begin
-            Hit_Miss = Clean_Miss;
-          end
-        end
-        Way_C: begin
-          if (internal_valid_array_read[Way_C] && internal_tag_array_read[Way_C][23]) begin
-            Hit_Miss = Dirty_Miss;
-          end else begin
-            Hit_Miss = Clean_Miss;
-          end
-        end
-        Way_D: begin
-          if (internal_valid_array_read[Way_D] && internal_tag_array_read[Way_D][23]) begin
-            Hit_Miss = Dirty_Miss;
-          end else begin
-            Hit_Miss = Clean_Miss;
-          end
-        end
-      endcase
     end
   end
 
